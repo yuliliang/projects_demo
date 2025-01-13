@@ -61,12 +61,12 @@ def visualize_TP_FP_TN_FN_per_month(X_test_with_ID, rand_num, file_str):
     """
     Goal: Generate a figure that visualized the TP, FP, TN, FN proportion for each month.
     """
-    tmp = X_test_with_ID[[cfg.CoN_target + '_Recover_home', 'Prediction', 'PAT_ID', 'RECORDED_DATE']].copy()
+    tmp = X_test_with_ID[[cfg.CoN_target, 'Prediction', 'PAT_ID', 'RECORDED_DATE']].copy()
     tmp['year'] = tmp['RECORDED_DATE'].dt.year
     tmp['month'] = tmp['RECORDED_DATE'].dt.month
     tmp = tmp.loc[tmp['year'] == 2023, :]  # focus on the 2023 data.
     tmp = tmp.sample(frac=1, random_state=rand_num)
-    tmp = tmp[[cfg.CoN_target + '_Recover_home', 'Prediction', 'PAT_ID', 'month']].copy()
+    tmp = tmp[[cfg.CoN_target, 'Prediction', 'PAT_ID', 'month']].copy()
     tmp = tmp.groupby(['month', 'PAT_ID']).head(1).reset_index(drop=True)
     tmp['Prediction_by_70_per'] = 0
 
@@ -80,12 +80,12 @@ def visualize_TP_FP_TN_FN_per_month(X_test_with_ID, rand_num, file_str):
     result_df = tmp.groupby('month').apply(top_70_percent_group)
 
     def TP_TN_FP_FN(row):
-        if row[cfg.CoN_target + '_Recover_home'] == 1:
+        if row[cfg.CoN_target] == 1:
             if row['Prediction_by_70_per'] == 1:
                 return 'TP'
             else:  # row['thr_by_70_per'] == 0:
                 return 'FN'
-        else:   # row[cfg.CoN_target + '_Recover_home'] == 0:
+        else:   # row[cfg.CoN_target] == 0:
             if row['Prediction_by_70_per'] == 1:
                 return 'FP'
             else:  # row['thr_by_70_per'] == 0:
@@ -120,11 +120,12 @@ def visualize_TP_FP_TN_FN_per_month(X_test_with_ID, rand_num, file_str):
     plt.close()
 
 
-def generate_cv_strategy(df):
+def generate_cv_strategy(df, CoN_kfold=''):
     """ A function that customized cross validation dataset """
-    tmp_df = pd.DataFrame(df[cfg.CoN_kfold].unique(), columns=[cfg.CoN_kfold])
-    tmp_df[cfg.CoN_kfold_inx] = np.random.randint(0, cfg.n_fold, tmp_df.shape[0])   # the integer: 0, 1, ..., n_fold-1
-    df_kfold = df.merge(tmp_df, how='left', on=cfg.CoN_kfold)
+    tmp_df = pd.DataFrame(df[CoN_kfold].unique(), columns=[CoN_kfold])
+    tmp_df[cfg.CoN_kfold_inx] = np.random.randint(0, cfg.n_fold, tmp_df.shape[0])  # kfold_inx: 0, 1, ..., n_fold-1
+    df_kfold = df.merge(tmp_df, how='left', on=CoN_kfold)
+
     myCViterator = []
     for i in range(0, cfg.n_fold):
         trainIndices = df_kfold[df_kfold[cfg.CoN_kfold_inx] != i].index.values.astype(int)
@@ -138,7 +139,11 @@ def SearchBestParameter(df_train, L_process_coef, X_train, Y_train, X_valid, Y_v
     Goal: Search the best parameter setting with Grid Search or Bayes Optimization.
     """
     # ..............
-    cv_strategy = generate_cv_strategy(df_train)   # generate n-fold based on the PAT_ID
+    if cfg.CoN_kfold == '':  # The general cross validation split
+        cv_strategy = cfg.n_fold
+    else:  # split the data into k-fold based on values in 1 certain column.
+        cv_strategy = generate_cv_strategy(df_train, CoN_kfold=cfg.CoN_kfold)  # generate n-fold based on the PAT_ID
+
     scoring = make_scorer(roc_auc_score, needs_proba=True, greater_is_better=True)   #     # scoring='auc'
 
     # ......... https://stackoverflow.com/questions/50686645/grid-search-with-lightgbm-example
@@ -350,15 +355,15 @@ def model_train(df_train, df_valid, df_test, rand_num, file_str, df_best_para):
             Y_test_with_ID.to_csv('Model_output__Y_with_prediction' + file_str + '.csv')
             X_test_with_ID[:1000].to_csv('Model_output__sampled_X_with_prediction' + file_str + '.csv')
 
-            tmp = Y_test_with_ID[['Prediction', 'PAT_ID', 'VISIT_NO']].copy()
-            # tmp.groupby(by=['PAT_ID', 'VISIT_NO']).head(2)
-            tmp2 = tmp.groupby(by=['PAT_ID'], as_index=False).head(1)  # demo with the first prediction for each patient
-            tmp2 = tmp2.sort_values(by='Prediction', ascending=False).reset_index(drop=True)
-            tmp2.to_csv('Model_output__prediction_table.csv')
-
-            tmp3 = tmp2.sample(frac=1.0).sample(n=20, random_state=rand_num)
-            tmp3 = tmp3.sort_values(by='Prediction', ascending=False).reset_index(drop=True)
-            tmp3.to_csv('Model_output__prediction_table_20samples.csv')
+            # tmp = Y_test_with_ID[['Prediction', 'PAT_ID', 'VISIT_NO']].copy()
+            # # tmp.groupby(by=['PAT_ID', 'VISIT_NO']).head(2)
+            # tmp2 = tmp.groupby(by=['PAT_ID'], as_index=False).head(1)  # demo with the first prediction for each patient
+            # tmp2 = tmp2.sort_values(by='Prediction', ascending=False).reset_index(drop=True)
+            # tmp2.to_csv('Model_output__prediction_table.csv')
+            #
+            # tmp3 = tmp2.sample(frac=1.0).sample(n=20, random_state=rand_num)
+            # tmp3 = tmp3.sort_values(by='Prediction', ascending=False).reset_index(drop=True)
+            # tmp3.to_csv('Model_output__prediction_table_20samples.csv')
 
         # @@@@@@@@@@@@@@@ (simple version) performance plot @@@@@@@@@@@@@@@@
         # ....... performance plot, roc_AUC & precision recall .................
@@ -402,7 +407,7 @@ def model_train(df_train, df_valid, df_test, rand_num, file_str, df_best_para):
             tmp_m = Y_pred.min()
             tmp_M = Y_pred.max()
             plt.plot([tmp_m, tmp_M], [tmp_m, tmp_M], linestyle='--', color='green', label='ref')
-            # plot_h = sns.jointplot(data=Y_test_with_ID, x=cfg.CoN_target + '_Recover_home', y='Prediction')
+            # plot_h = sns.jointplot(data=Y_test_with_ID, x=cfg.CoN_target, y='Prediction')
             # fig = plot_h.fig
             # plt.legend(loc='upper right')
             # plt.tight_layout()

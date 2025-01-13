@@ -198,14 +198,23 @@ def data_pre_process(df_raw, train_or_test, L_process_coef):
     """
     df = df_raw.copy()
 
+    # ....... normalize values, if necessary .........
+    # from sklearn.preprocessing import StandardScaler
+    # scaler = StandardScaler()
+    # num_features = X_train.select_dtypes(include=['float']).columns
+    # for CoN in num_features:
+    #     df[CoN] = scaler.fit_transform(df[CoN])
+
+    # ........ set up input features, target values, and store row_id in certain way ........
     df_y = df[[cfg.CoN_target]].copy()
     df_y_with_ID = (df[[cfg.CoN_target] + cfg.CoN_ID]).copy()
 
+    tmp = df_y_with_ID.pop(cfg.CoN_target)
+    df_y_with_ID.insert(loc=0, column=cfg.CoN_target, value=tmp)
     for i in range(len(cfg.CoN_ID)-1, -1, -1):
         CoN = cfg.CoN_ID[i]
         tmp = df_y_with_ID.pop(CoN)
         df_y_with_ID.insert(loc=1, column=CoN, value=tmp)
-    df_y_with_ID = df_y_with_ID.rename({cfg.CoN_target: cfg.CoN_target + '_Recover_home'}, axis='columns')
 
     # ...... data preprocessing: drop some columns & deal with missing values ......
     CoN_discard = []
@@ -319,20 +328,23 @@ def data_pre_process(df_raw, train_or_test, L_process_coef):
         print("Error (Yuli): 'train_or_test' is not 'train' nor 'test'.")
         sys.exit()
 
+    # construct the input features with ID, before delete the ID and target columns.
+    df_with_ID = df.copy()
+    tmp = df_with_ID.pop(cfg.CoN_target)
+    df_with_ID.insert(loc=0, column=cfg.CoN_target, value=tmp)
+    for i in range(len(cfg.CoN_ID)-1, -1, -1):
+        CoN = cfg.CoN_ID[i]
+        tmp = df_with_ID.pop(CoN)
+        df_with_ID.insert(loc=1, column=CoN, value=tmp)
+
+    # delete the columns that won't be part of the input features, such as ID and target columns.
     tmp = list(df.columns)
     for CoN in CoN_discard:
         if CoN in tmp:
             del df[CoN]
+            del df_with_ID[CoN]
         else:
             print(CoN + " is not in the df.")
-
-    df_with_ID = df.copy()
-    for i in range(len(cfg.CoN_ID)-1, -1, -1):
-        CoN = cfg.CoN_ID[i]
-        tmp = df_with_ID.pop(CoN)
-        df_with_ID.insert(loc=0, column=CoN, value=tmp)
-    df_with_ID.insert(loc=0, column=cfg.CoN_target + '_Recover_home',
-                      value=df_y_with_ID[cfg.CoN_target + '_Recover_home'])
 
     for CoN in cfg.CoN_ID:
         del df[CoN]
@@ -351,42 +363,43 @@ def query_data():
         df: The queried data.
     """
     # ====== Instead of query, load saved data ======
-    # df = pd.read_excel(cfg.in_file_name, dtype=cfg.input_data_type) # take around 20 minutes.
-    # df = df.loc[:20000, :]
+    if cfg.Q_test:
+        df = pd.read_excel(cfg.in_file_name, dtype=cfg.input_data_type) # take around 20 minutes.
+        # df = df.loc[:20000, :]
 
-    # ===== connect EDW from JDB ======
-    conn = connect_EDW_by_JDB()
-    curs = conn.cursor()
-    # myquery = "select * from visit_dm.visit where rownum<5"
-    def execute_sql(q_drop, q):
-        try:
-            curs.execute(q_drop)  # "DROP TABLE U6055216.rehab_fea_flow_sheet_measure")
-        except:
-            print("Yuli: table not exist")
-        curs.execute(q)
+    else:      # ===== connect EDW from JDB ======
+        conn = connect_EDW_by_JDB()
+        curs = conn.cursor()
+        # myquery = "select * from visit_dm.visit where rownum<5"
+        def execute_sql(q_drop, q):
+            try:
+                curs.execute(q_drop)  # "DROP TABLE U6055216.rehab_fea_flow_sheet_measure")
+            except:
+                print("Yuli: table not exist")
+            curs.execute(q)
 
-    execute_sql(cfg.query0_drop, cfg.query0)    # 2024_0814: probably take around 22 minutes
-    execute_sql(cfg.query1_rehab_fea_flow_sheet_measure_drop, cfg.query1_rehab_fea_flow_sheet_measure)
+        execute_sql(cfg.query0_drop, cfg.query0)    # 2024_0814: probably take around 22 minutes
+        execute_sql(cfg.query1_rehab_fea_flow_sheet_measure_drop, cfg.query1_rehab_fea_flow_sheet_measure)
 
-    execute_sql(cfg.query2_rehab_fea_time_series_mobility_score_drop, cfg.query2_rehab_fea_time_series_mobility_score)
-    execute_sql(cfg.query2_rehab_fea_time_series_PT_therapy_drop, cfg.query2_rehab_fea_time_series_PT_therapy)
-    execute_sql(cfg.query2_rehab_fea_time_series_OT_therapy_drop, cfg.query2_rehab_fea_time_series_OT_therapy)
-    execute_sql(cfg.query2_rehab_fea_time_series_OT_activity_score_drop, cfg.query2_rehab_fea_time_series_OT_activity_score)
-    execute_sql(cfg.query2_rehab_fea_time_series_score_D_therapy_time_drop, cfg.query2_rehab_fea_time_series_score_D_therapy_time)
-    execute_sql(cfg.query2_rehab_fea_Vital_for_score_date_drop, cfg.query2_rehab_fea_Vital_for_score_date)   # this is a little bit long, but less than 1 minutes for inferencing
-    execute_sql(cfg.query2_rehab_fea_surgery_drop, cfg.query2_rehab_fea_surgery)
-    execute_sql(cfg.query2_rehab_fea_time_series_combine_drop, cfg.query2_rehab_fea_time_series_combine)
+        execute_sql(cfg.query2_rehab_fea_time_series_mobility_score_drop, cfg.query2_rehab_fea_time_series_mobility_score)
+        execute_sql(cfg.query2_rehab_fea_time_series_PT_therapy_drop, cfg.query2_rehab_fea_time_series_PT_therapy)
+        execute_sql(cfg.query2_rehab_fea_time_series_OT_therapy_drop, cfg.query2_rehab_fea_time_series_OT_therapy)
+        execute_sql(cfg.query2_rehab_fea_time_series_OT_activity_score_drop, cfg.query2_rehab_fea_time_series_OT_activity_score)
+        execute_sql(cfg.query2_rehab_fea_time_series_score_D_therapy_time_drop, cfg.query2_rehab_fea_time_series_score_D_therapy_time)
+        execute_sql(cfg.query2_rehab_fea_Vital_for_score_date_drop, cfg.query2_rehab_fea_Vital_for_score_date)   # this is a little bit long, but less than 1 minutes for inferencing
+        execute_sql(cfg.query2_rehab_fea_surgery_drop, cfg.query2_rehab_fea_surgery)
+        execute_sql(cfg.query2_rehab_fea_time_series_combine_drop, cfg.query2_rehab_fea_time_series_combine)
 
-    execute_sql(cfg.query3_rehab_fea_all_drop, cfg.query3_rehab_fea_all)
-    df = pd.read_sql_query(cfg.query3_rehab_fea_all__get_data, con=conn)  # store query results
+        execute_sql(cfg.query3_rehab_fea_all_drop, cfg.query3_rehab_fea_all)
+        df = pd.read_sql_query(cfg.query3_rehab_fea_all__get_data, con=conn)  # store query results
 
-    for CoN in list(df.columns):  # make sure the data type are desired.
-        if CoN in cfg.input_data_type:
-            if df[CoN].dtype != cfg.input_data_type[CoN]:
-                df[CoN] = df[CoN].astype(cfg.input_data_type[CoN])
-    curs.close()
-    conn.close()
-    print("Yuli: connection close!")
+        for CoN in list(df.columns):  # make sure the data type are desired.
+            if CoN in cfg.input_data_type:
+                if df[CoN].dtype != cfg.input_data_type[CoN]:
+                    df[CoN] = df[CoN].astype(cfg.input_data_type[CoN])
+        curs.close()
+        conn.close()
+        print("Yuli: connection close!")
 
     return df
 
