@@ -14,6 +14,7 @@ import math
 
 from AcuteRehabRecoverRate_Yuli__data_query_ import query_data, feature_data_visualization
 from AcuteRehabRecoverRate_Yuli__model_ import model_train
+from AcuteRehabRecoverRate_Yuli__eval_ import eval_test_data
 import AcuteRehabRecoverRate_Yuli__config_ as cfg
 
 def split_data_train_test(df, rand_num):
@@ -133,8 +134,13 @@ if __name__ == "__main__":
         df_train, df_valid, df_test = split_data_train_test(df, rand_num)
 
         st = time()
-        mae, AUC_RecallPrecision, roc_auc \
-            = model_train(df_train, df_valid, df_test, rand_num, file_str, df_best_para)
+        # mae, AUC_RecallPrecision, roc_auc \
+        #     = model_train(df_train, df_valid, df_test, rand_num, file_str, df_best_para)
+        model_best_para, L_process_coef, model_path_FName = \
+            model_train(df_train, df_valid, rand_num, file_str, df_best_para)
+        mae, AUC_RecallPrecision, roc_auc = \
+            eval_test_data(model_best_para, df_test, L_process_coef, rand_num, file_str)
+
         elapsed_time = time() - st
         print(str(rand_num) + ': Model train + test time:', elapsed_time/60., ' minutes')
 

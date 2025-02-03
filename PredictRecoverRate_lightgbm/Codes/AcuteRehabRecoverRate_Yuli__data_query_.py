@@ -1,10 +1,12 @@
 import pandas as pd
 import numpy as np
+import sys
 import seaborn as sns
 import matplotlib.pyplot as plt
-import sys
 import AcuteRehabRecoverRate_Yuli__config_ as cfg
 connect_EDW_by_JDB = cfg.connect_EDW_by_JDB
+
+
 # @@@@@@@@@@@@@@@@@@@@ raw data visualization @@@@@@@@@@@@@@@@@
 def feature_data_visualization(df, target_format):
     """
@@ -33,7 +35,7 @@ def feature_data_visualization(df, target_format):
     List_CoN = df.columns
     print('Generate data distribution plot')
     for CoN in List_CoN:
-        if CoN in (cfg.CoN_ID + cfg.CoN_discard):
+        if CoN in (cfg.CoN_ID + list(cfg.CoN_discard)):
             continue
 
         NULL_percent = (df.loc[:,CoN]).isnull().sum()/df.shape[0]
@@ -82,6 +84,7 @@ def feature_data_visualization(df, target_format):
         plt.close()    # close specific sns figure: plt.close(sns_plot.fig)
     return 1
 
+
 # @@@@@@@@@@@@@@@ split into train, validation, and test data @@@@@@@@@@@
 def split_data_train_test(df, rand_num):
     """
@@ -98,6 +101,7 @@ def split_data_train_test(df, rand_num):
         np.split(df.sample(frac=1, random_state=rand_num),
                  [int(cfg.train_portion * len(df)), int((cfg.train_portion + cfg.valid_portion) * len(df))]))
     return df_train, df_valid, df_test
+
 
 # @@@@@@@@@@@@@@@@@@@@ encode categorical value in dataframe @@@@@@@@@@@@@@@@@
 class cat_encode():
@@ -173,10 +177,20 @@ class cat_encode():
         """
         if List_top_val:
             df[CoN] = df[CoN].apply(lambda x: x if (x in List_top_val) else np.nan)
-        dummies = pd.get_dummies(df[CoN], prefix=CoN, prefix_sep='_', dummy_na=False)   # .astype(int)
+        dummies = pd.get_dummies(df[CoN], prefix=CoN, prefix_sep='_', dummy_na=False).astype(int)
+
+        # if there are expected values that are not show in the data, set a column with all zeros for it.
+        for val in List_top_val:
+            if CoN + '_' + val not in dummies.columns:
+                dummies[CoN + '_' + val] = 0
+        # make sure the feature column order are the same with List_top_val
+        tmp = [CoN + '_' + val for val in List_top_val]
+        dummies = dummies.reindex(columns=tmp)
+
         del df[CoN]
         df = pd.concat([df, dummies], axis=1)
         return df
+
 
 # @@@@@@@@@@@@@@@@@@@@ data preprocessing @@@@@@@@@@@@@@@@@
 def data_pre_process(df_raw, train_or_test, L_process_coef):
@@ -211,13 +225,14 @@ def data_pre_process(df_raw, train_or_test, L_process_coef):
 
     tmp = df_y_with_ID.pop(cfg.CoN_target)
     df_y_with_ID.insert(loc=0, column=cfg.CoN_target, value=tmp)
-    for i in range(len(cfg.CoN_ID)-1, -1, -1):
+    for i in range(len(cfg.CoN_ID) - 1, -1, -1):
         CoN = cfg.CoN_ID[i]
         tmp = df_y_with_ID.pop(CoN)
         df_y_with_ID.insert(loc=1, column=CoN, value=tmp)
 
+
     # ...... data preprocessing: drop some columns & deal with missing values ......
-    CoN_discard = []
+    CoN_discard = set()
     ce = cat_encode()
     if train_or_test == 'train':
         L_process_coef = {}
@@ -240,20 +255,24 @@ def data_pre_process(df_raw, train_or_test, L_process_coef):
                 continue
             elif (df[CoN].unique()).shape[0] == 1:  # only 1 value in this column, delete it.
                 print('Yuli: Column ' + CoN + ' contain only 1 unique value in train data. Delete this column.')
-                CoN_discard.append(CoN)
+                CoN_discard.add(CoN)
                 L_process_coef[CoN] = ['del']
                 continue
-            elif (df.loc[:,CoN]).isnull().sum() / N_row > cfg.missing_val_tolerance__feature:  # too many missing values
+            elif (
+            df.loc[:, CoN]).isnull().sum() / N_row > cfg.missing_val_tolerance__feature:  # too many missing values
                 print('Yuli: Column ' + CoN + ' contain too many missing values. Delete this column.')
-                CoN_discard.append(CoN)
+                CoN_discard.add(CoN)
                 L_process_coef[CoN] = ['del']
                 continue
 
             else:
                 if df[CoN].dtype == 'object':
                     df.loc[:, CoN].fillna(cfg.object_fillna_value, inplace=True)
-                    L_process_coef[CoN] = ['cat', cfg.object_fillna_value]
-                else:   # numerical data
+                    if CoN in cfg.CoN_1hot:
+                        L_process_coef[CoN] = ['cat_1hot', cfg.object_fillna_value]
+                    else:
+                        L_process_coef[CoN] = ['cat', cfg.object_fillna_value]
+                else:  # numerical data
                     if cfg.Q_add_bool_col_num_fea:
                         df[cfg.flag_preStr + CoN] = df[CoN].apply(lambda x: 0 if pd.isna(x) else 1)
                         L_process_coef[cfg.flag_preStr + CoN] = ['num', '']
@@ -281,8 +300,13 @@ def data_pre_process(df_raw, train_or_test, L_process_coef):
         # ...... deal with categorical features encoding .....
         if cfg.Q_encode_cat_fea:
             for CoN in L_process_coef:
-                if L_process_coef[CoN][0] == 'cat':
-                    List_val = ce.List_val__sort(df, CoN)  # get the cat value want to encode, order matter
+                if L_process_coef[CoN][0] == 'cat_1hot':  # categorical feature encode in 1-hot.
+                    List_val = ce.List_val__top_count_n(df, CoN, top_value_coverage=0.9)
+                    df = ce.one_hot_coding(df, CoN, List_val)
+                    L_process_coef[CoN].append(List_val)
+
+                elif L_process_coef[CoN][0] == 'cat':   # categorical feature encode in label encoder
+                    List_val = ce.List_val__sort(df, CoN)  # The cat value would be encoded. order decide encoded values.
                     ce.map2int(df, CoN, List_val)
                     L_process_coef[CoN].append(List_val)
 
@@ -290,20 +314,22 @@ def data_pre_process(df_raw, train_or_test, L_process_coef):
         # L_process_coef[Con] format:
         #   CoN are id, like patient_id, visit_no: ['id']
         #   CoN are not used as feature: ['del']
-        #   CoN is categorical feature: ['cat', value_for_null, categorical_feature_mapping]
+        #   CoN is categorical feature & encode in label encode: ['cat', value_for_null, categorical_feature_mapping]
+        #   CoN is categorical feature & encode in 1-hot: ['cat_1hot', value_for_null, categorical_feature_mapping]
         #   CoN is numerical features: ['num', value_for_null, outlier_lower_bound, outlier_upper_bound]
         # only when CoN is additional nan indicator column will have special format: ['num', '']
-        CoN_discard = []
+        CoN_discard = set()
         for CoN in L_process_coef:
             if L_process_coef[CoN][0] == 'id':
                 continue
             elif L_process_coef[CoN][0] == 'del':
-                CoN_discard.append(CoN)
+                CoN_discard.add(CoN)
                 continue
-            elif (L_process_coef[CoN][0] == 'cat') | (L_process_coef[CoN][0] == 'num'):
+            elif (L_process_coef[CoN][0] == 'cat') | (L_process_coef[CoN][0] == 'cat_1hot'):
+                df.loc[:, CoN].fillna(L_process_coef[CoN][1], inplace=True)
+            elif L_process_coef[CoN][0] == 'num':
                 if cfg.Q_add_bool_col_num_fea:
-                    if (L_process_coef[CoN][0] == 'num'):
-                        df[cfg.flag_preStr + CoN] = df[CoN].apply(lambda x: 0 if pd.isna(x) else 1)
+                    df[cfg.flag_preStr + CoN] = df[CoN].apply(lambda x: 0 if pd.isna(x) else 1)
                 df.loc[:, CoN].fillna(L_process_coef[CoN][1], inplace=True)
             else:
                 print('Error (Yuli): Unrecognized L_process_coef[CoN][0] = ' + str(L_process_coef[CoN][0]))
@@ -321,7 +347,9 @@ def data_pre_process(df_raw, train_or_test, L_process_coef):
 
         if cfg.Q_encode_cat_fea:
             for CoN in L_process_coef:
-                if L_process_coef[CoN][0] == 'cat':
+                if L_process_coef[CoN][0] == 'cat_1hot':  # categorical feature encode in 1-hot.
+                    df = ce.one_hot_coding(df, CoN, L_process_coef[CoN][2])
+                elif L_process_coef[CoN][0] == 'cat':
                     ce.map2int(df, CoN, L_process_coef[CoN][2])
 
     else:
@@ -332,7 +360,7 @@ def data_pre_process(df_raw, train_or_test, L_process_coef):
     df_with_ID = df.copy()
     tmp = df_with_ID.pop(cfg.CoN_target)
     df_with_ID.insert(loc=0, column=cfg.CoN_target, value=tmp)
-    for i in range(len(cfg.CoN_ID)-1, -1, -1):
+    for i in range(len(cfg.CoN_ID) - 1, -1, -1):
         CoN = cfg.CoN_ID[i]
         tmp = df_with_ID.pop(CoN)
         df_with_ID.insert(loc=1, column=CoN, value=tmp)
@@ -340,6 +368,7 @@ def data_pre_process(df_raw, train_or_test, L_process_coef):
     # delete the columns that won't be part of the input features, such as ID and target columns.
     tmp = list(df.columns)
     for CoN in CoN_discard:
+        print(CoN)
         if CoN in tmp:
             del df[CoN]
             del df_with_ID[CoN]
