@@ -1,5 +1,5 @@
 << Objective >>
-Train a recommender system based on neural network from scratch. Here we use Kaggle H&M data as dataset:
+Build recommender system based on neural network from scratch. Here we use H&M dataset from Kaggle:
 	
   H&M Personalized Fashion Recommendations 
   https://www.kaggle.com/competitions/h-and-m-personalized-fashion-recommendations
