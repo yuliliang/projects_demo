@@ -1,8 +1,9 @@
 # Variational Autoencoder (VAE) & Autoencoder (AE) for Facial Anomaly Detection and Image Generation
+<br>
 <div align="center">
-<img src="AnomalyDetection_GenerativeAI__VAE_AE/demo_image/_AE_ResNet_embed2304_AE_img_interpolation_sample.png" width="700"/>
+<img src="demo_image/_AE_ResNet_embed2304_AE_img_interpolation_sample.png" width="700"/>
 </div>
-
+<br>
 This repository features deep learning models, **a Variational Autoencoder (VAE)** and **an Autoencoder (AE)**—designed for:
 
 - Facial anomaly detection  
@@ -11,6 +12,8 @@ This repository features deep learning models, **a Variational Autoencoder (VAE)
 
 Both models are based on a custom **ResNet-inspired convolutional neural network architecture** and trained on the [Age, Gender, and Ethnicity facial image dataset](https://www.kaggle.com/datasets/).
 
+<br>
+<br>
 ---
 
 ## ⚙️ Variational Autoencoder (VAE)
@@ -20,16 +23,17 @@ The VAE learns a distribution of typical facial features, enabling it to detect 
 ### Example Highlight:
 - **Anomaly Detection**: Detect unusual facial patterns via reconstruction loss
 <div align="center">
-<img src="AnomalyDetection_GenerativeAI__VAE_AE/demo_image/VAE_anomaly_detection_samples.png" width="500"/>
+<img src="demo_image/VAE_anomaly_detection_samples.png" width="500"/>
 </div>
-
+<br>
 
 
 - **Generative AI**: Create synthetic face images from random latent noise 
 <div align="center">
-<img src="AnomalyDetection_GenerativeAI__VAE_AE/demo_image/VAE_sample_from_latent_space.png" width="500"/>
+<img src="demo_image/VAE_sample_from_latent_space.png" width="500"/>
 </div>
-
+<br>
+<br>
 
 
 ### Key Files:
@@ -43,6 +47,8 @@ The VAE learns a distribution of typical facial features, enabling it to detect 
 - Sample synthetic faces
 - Identify facial outliers
 
+<br>
+<br>
 ---
 
 ## ⚙️ Autoencoder (AE)
@@ -55,9 +61,9 @@ The AE version is a standard encoder-decoder network (also based on ResNet), use
 ### Example Highlight:
 - **Interpolation Demo**: Morph one face into another by interpolating between two embeddings.
 <div align="center">
-<img src="AnomalyDetection_GenerativeAI__VAE_AE/demo_image/_AE_ResNet_embed2304_AE_img_interpolation_sample.png"/>
+<img src="demo_image/_AE_ResNet_embed2304_AE_img_interpolation_sample.png"/>
 </div>
-
+<br>
 
 
 ### Key Files:
